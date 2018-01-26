@@ -131,7 +131,7 @@ pub mod repl {
         }
 
         fn error(&mut self) {
-            println!("{} Invalid input!", char_from_prompt(Prompt::Error));
+            println!("{}  Unbalanced ']' input", char_from_prompt(Prompt::Error));
             self.reset();
         }
 
