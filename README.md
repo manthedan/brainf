@@ -10,7 +10,7 @@ A Brainf*** REPL for the modern developer
 
 ### Prerequisites
 
-####Rust
+#### Rust
 
 * Rust is a systems programming language that runs blazingly fast, prevents segfaults, and guarantees thread safety. 
 
@@ -26,7 +26,7 @@ A Brainf*** REPL for the modern developer
   * efficient C bindings
 
 
-###Installing
+### Installing
 
 Clone the repo and
 
@@ -35,7 +35,7 @@ cargo run
 ```
 
 
-##Future Features
+## Future Features
 
 * Code completion
 * Colors
