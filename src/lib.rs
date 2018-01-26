@@ -162,7 +162,7 @@ pub mod repl {
 
         // Printing the memory cell state as a REPL feature
         pub fn print_brain(&self) {
-            println!("{}  {}", char_from_prompt(Prompt::State), self.brain);
+            println!("{} {}", char_from_prompt(Prompt::State), self.brain);
         }
 
         pub fn take_tokens(&mut self, mut tokens: Vec<Token>) {

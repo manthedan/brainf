@@ -2,12 +2,14 @@
 #![cfg_attr(feature = "dev", feature(plugin))]
 #![cfg_attr(feature = "dev", plugin(clippy))]
 
+
 extern crate brainf;
 
 use std::mem;
 use brainf::repl::Interpreter;
 use brainf::repl::Parser;
 
+#[allow(unused_assignments)]
 fn main() {
     let mut input_buffer = String::new();
     let mut parser = Parser::new();

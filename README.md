@@ -12,18 +12,18 @@ A Brainf*** REPL for the modern developer
 
 ####Rust
 
-* Rust is a systems programming language that runs blazingly fast, prevents segfaults, and guarantees thread safety. 
+Rust is a systems programming language that runs blazingly fast, prevents segfaults, and guarantees thread safety. 
 
-  Featuring:
-  * zero-cost abstractions
-  * move semantics
-  * guaranteed memory safety
-  * threads without data races
-  * trait-based generics
-  * pattern matching
-  * type inference
-  * minimal runtime
-  * efficient C bindings
+Featuring:
+* zero-cost abstractions
+* move semantics
+* guaranteed memory safety
+* threads without data races
+* trait-based generics
+* pattern matching
+* type inference
+* minimal runtime
+* efficient C bindings
 
 
 ###Installing
@@ -34,13 +34,12 @@ Clone the repo and
 cargo run
 ```
 
-
 ##Future Features
 
 * Code completion
-* Colors
-* fearless concurrency
-* zero-cost abstractions
+* Syntax Highlighting
+* Fearless concurrency
+* Zero-cost abstractions
 * Electron Front End
 
 
