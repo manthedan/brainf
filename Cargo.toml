@@ -1,0 +1,12 @@
+[package]
+authors = ["manthedan <3868926+manthedan@users.noreply.github.com>"]
+name = "brainf"
+version = "0.1.0"
+
+[dependencies]
+clippy = {version = "*", optional = true}
+
+[features]
+default = []
+dev = ["clippy"]
+
