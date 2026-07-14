@@ -2,6 +2,7 @@
 
 A Brainf*** REPL for the modern developer
 
+* now with vibes!
 
 ![Wow! It's amazing!](https://user-images.githubusercontent.com/3868926/35427307-5e5b632a-021d-11e8-8e7a-4fb245edf9ba.png)
 

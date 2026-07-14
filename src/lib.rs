@@ -1,8 +1,7 @@
 pub mod repl {
+    use std::fmt;
     use std::io;
     use std::io::prelude::*;
-    use std::process;
-    use std::fmt;
 
     // Enums for shell prompt symbols
     #[derive(Copy, Clone, Debug)]
@@ -15,13 +14,20 @@ pub mod repl {
     }
 
     // Print shell prompt then accept user input
-    fn read_input(prompt: Prompt) -> String {
+    fn read_input(prompt: Prompt) -> Option<String> {
         print!("{}  ", char_from_prompt(prompt));
         io::stdout().flush().expect("failed to flush prompt buffer");
 
         let mut line = String::new();
-        io::stdin().read_line(&mut line).unwrap();
-        line.trim().to_string()
+        let bytes_read = io::stdin()
+            .read_line(&mut line)
+            .expect("failed to read input");
+
+        if bytes_read == 0 {
+            None
+        } else {
+            Some(line.trim_end_matches(['\r', '\n']).to_string())
+        }
     }
 
     // Returns symbols defined for prompt
@@ -38,7 +44,7 @@ pub mod repl {
 
     // Tokens that compromise our language
     // Usize is used to index the Jump tokens
-    #[derive(Copy, Clone, Debug)]
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
     pub enum Token {
         PointerIncrement,
         PointerDecrement,
@@ -56,7 +62,6 @@ pub mod repl {
         pub tokens: Vec<Token>,
         pub match_stack: Vec<usize>,
         cursor: usize,
-        prev_cursor: usize,
     }
 
     impl Parser {
@@ -65,15 +70,14 @@ pub mod repl {
                 tokens: Vec::new(),
                 match_stack: Vec::new(),
                 cursor: 0,
-                prev_cursor: 0,
             }
         }
 
-        pub fn read_std() -> String {
+        pub fn read_std() -> Option<String> {
             read_input(Prompt::Input)
         }
 
-        pub fn read_cont() -> String {
+        pub fn read_cont() -> Option<String> {
             read_input(Prompt::Continue)
         }
 
@@ -86,13 +90,9 @@ pub mod repl {
                     '-' => self.push_token(Token::DataDecrement),
                     '.' => self.push_token(Token::Output),
                     ',' => self.push_token(Token::Input),
-                    '[' => if self.push_match(Token::JumpForward(0)).is_err() {
-                        return;
-                    },
-                    ']' => if self.push_match(Token::JumpBackward(0)).is_err() {
-                        return;
-                    },
-                    '?' => process::exit(0),
+                    '[' => self.push_open(),
+                    ']' if self.push_close().is_err() => return,
+                    ']' => {}
                     _ => (),
                 }
             }
@@ -103,30 +103,19 @@ pub mod repl {
             self.cursor += 1;
         }
 
-        fn push_match(&mut self, token: Token) -> Result<(), ()> {
-            match token {
-                Token::JumpForward(_) => {
-                    // TODO: Figure this out
-                    let cursor = self.cursor;
-                    self.match_stack.push(cursor);
-                    self.push_token(Token::JumpForward(0));
-                }
-                Token::JumpBackward(_) => {
-                    let prev = self.match_stack.pop();
-                    match prev {
-                        None => {
-                            self.error();
-                            return Err(());
-                        }
-                        Some(i) => {
-                            let prev_cursor = self.prev_cursor;
-                            self.tokens[i] = Token::JumpForward(self.cursor + prev_cursor);
-                            self.push_token(Token::JumpBackward(i + prev_cursor));
-                        }
-                    }
-                }
-                _ => (),
-            }
+        fn push_open(&mut self) {
+            self.match_stack.push(self.cursor);
+            self.push_token(Token::JumpForward(0));
+        }
+
+        fn push_close(&mut self) -> Result<(), ()> {
+            let Some(open) = self.match_stack.pop() else {
+                self.error();
+                return Err(());
+            };
+
+            self.tokens[open] = Token::JumpForward(self.cursor);
+            self.push_token(Token::JumpBackward(open));
             Ok(())
         }
 
@@ -138,7 +127,6 @@ pub mod repl {
         pub fn reset(&mut self) {
             self.tokens = Vec::new();
             self.match_stack = Vec::new();
-            self.prev_cursor += self.cursor;
             self.cursor = 0;
         }
     }
@@ -165,8 +153,9 @@ pub mod repl {
             println!("{} {}", char_from_prompt(Prompt::State), self.brain);
         }
 
-        pub fn take_tokens(&mut self, mut tokens: Vec<Token>) {
-            self.tokens.append(&mut tokens);
+        pub fn take_tokens(&mut self, tokens: Vec<Token>) {
+            self.tokens = tokens;
+            self.cursor = 0;
         }
 
         pub fn interpret(&mut self) {
@@ -194,7 +183,9 @@ pub mod repl {
         }
 
         fn backward(&mut self, i: usize) {
-            self.cursor = i - 1;
+            if !self.brain.is_zero() {
+                self.cursor = i;
+            }
         }
     }
 
@@ -204,7 +195,7 @@ pub mod repl {
     pub struct Brain {
         cells: Vec<u8>,
         ptr: usize,
-        output_buffer: String,
+        output_buffer: Vec<u8>,
     }
 
     impl Brain {
@@ -212,30 +203,37 @@ pub mod repl {
             Brain {
                 cells: vec![0; 1],
                 ptr: 0,
-                output_buffer: String::new(),
+                output_buffer: Vec::new(),
             }
         }
 
-        fn read_byte(&self) -> String {
+        fn read_byte(&self) -> Option<String> {
             read_input(Prompt::Byte)
         }
 
         fn flush_output_buffer(&mut self) {
             if !self.output_buffer.is_empty() {
-                println!("{}", self.output_buffer);
+                let mut stdout = io::stdout().lock();
+                stdout
+                    .write_all(&self.output_buffer)
+                    .and_then(|()| stdout.write_all(b"\n"))
+                    .expect("failed to write output");
                 self.output_buffer.clear();
             }
         }
 
         fn input(&mut self) {
-            // I don't know if this is good or bad
-            if let Some(n) = self.read_byte().chars().next() {
-                self.add(n as u8)
+            if let Some(byte) = self
+                .read_byte()
+                .as_deref()
+                .and_then(|input| input.as_bytes().first())
+            {
+                self.cells[self.ptr] = *byte;
             }
         }
 
         fn output(&mut self) {
-            self.output_buffer.push(self.cells[self.ptr] as char);
+            self.output_buffer.push(self.cells[self.ptr]);
         }
 
         fn ptr_right(&mut self) {
@@ -272,7 +270,8 @@ pub mod repl {
     // Custom display to indicate current memory state
     impl fmt::Display for Brain {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            let output: String = self.cells
+            let output: String = self
+                .cells
                 .iter()
                 .enumerate()
                 .map(|(i, cell)| {
@@ -284,6 +283,84 @@ pub mod repl {
                 })
                 .collect();
             write!(f, "{}", output)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn run(interpreter: &mut Interpreter, source: &str) {
+            let mut parser = Parser::new();
+            parser.tokenize(source);
+            assert!(parser.match_stack.is_empty(), "test program is unbalanced");
+            interpreter.take_tokens(parser.tokens);
+            interpreter.interpret();
+        }
+
+        #[test]
+        fn parser_links_nested_loops() {
+            let mut parser = Parser::new();
+            parser.tokenize("[[]]");
+
+            assert_eq!(
+                parser.tokens,
+                vec![
+                    Token::JumpForward(3),
+                    Token::JumpForward(2),
+                    Token::JumpBackward(1),
+                    Token::JumpBackward(0),
+                ]
+            );
+        }
+
+        #[test]
+        fn parser_treats_question_marks_as_comments() {
+            let mut parser = Parser::new();
+            parser.tokenize("?+?");
+
+            assert_eq!(parser.tokens, vec![Token::DataIncrement]);
+        }
+
+        #[test]
+        fn loops_can_start_a_new_repl_entry() {
+            let mut interpreter = Interpreter::new();
+            run(&mut interpreter, "+");
+            run(&mut interpreter, "[-]");
+
+            assert_eq!(interpreter.brain.cells, vec![0]);
+        }
+
+        #[test]
+        fn rejected_input_does_not_corrupt_the_next_program() {
+            let mut parser = Parser::new();
+            parser.tokenize("+]");
+            assert!(parser.tokens.is_empty());
+
+            parser.tokenize("+[-]");
+            let mut interpreter = Interpreter::new();
+            interpreter.take_tokens(parser.tokens);
+            interpreter.interpret();
+
+            assert_eq!(interpreter.brain.cells, vec![0]);
+        }
+
+        #[test]
+        fn nested_loops_work() {
+            let mut interpreter = Interpreter::new();
+            run(&mut interpreter, "++[>++[>+<-]<-]");
+
+            assert_eq!(interpreter.brain.cells, vec![0, 0, 4]);
+            assert_eq!(interpreter.brain.ptr, 0);
+        }
+
+        #[test]
+        fn output_is_byte_oriented() {
+            let mut brain = Brain::new();
+            brain.decrement();
+            brain.output();
+
+            assert_eq!(brain.output_buffer, vec![255]);
         }
     }
 }
